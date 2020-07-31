@@ -1,8 +1,8 @@
-var fs = require('fs');
-var net = require('net');
-var path = require('path');
-var util = require('util');
-var Transform = require('stream').Transform;
+const fs = require('fs');
+const net = require('net');
+const path = require('path');
+const util = require('util');
+const Transform = require('stream').Transform;
 util.inherits(ClamAVChannel, Transform);
 
 function ClamAVChannel(options) {
@@ -18,7 +18,7 @@ ClamAVChannel.prototype._transform = function(chunk, encoding, callback) {
     this._inBody = true;
   }
 
-  var size = new Buffer(4);
+  const size = new Buffer(4);
   size.writeInt32BE(chunk.length, 0);
   this.push(size);
   this.push(chunk);
@@ -26,7 +26,7 @@ ClamAVChannel.prototype._transform = function(chunk, encoding, callback) {
   callback();
 };
 ClamAVChannel.prototype._flush = function (callback) {
-  var size = new Buffer(4);
+  const size = new Buffer(4);
   size.writeInt32BE(0, 0);
   this.push(size);
 
@@ -34,10 +34,10 @@ ClamAVChannel.prototype._flush = function (callback) {
 };
 
 clamavstreamscan = function(port, host, stream, complete, object, callback) {
-  var socket = new net.Socket();
-  var status = '';
+  const socket = new net.Socket();
+  let status = '';
   socket.connect(port, host, function() {
-    var channel = new ClamAVChannel();
+    const channel = new ClamAVChannel();
     stream.pipe(channel).pipe(socket).on('end', function() {
       if (status === '') {
         callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
@@ -52,7 +52,7 @@ clamavstreamscan = function(port, host, stream, complete, object, callback) {
     if (data.toString().indexOf("\n") !== -1) {
       socket.destroy();
       status = status.substring(0, status.indexOf("\n"));
-      var result = status.match(/^stream: (.+) FOUND$/);
+      let result = status.match(/^stream: (.+) FOUND$/);
       if (result !== null) {
         callback(undefined, object, result[1]);
       }
@@ -76,8 +76,8 @@ clamavstreamscan = function(port, host, stream, complete, object, callback) {
 }
 
 clamavfilescan = function(port, host, filename, callback) {
-  var stream = fs.createReadStream(filename);
-  clamavstreamscan(port, host, stream, function(stream) { stream.destroy(); }, filename, callback);
+  const stream = fs.createReadStream(filename);
+  clamavstreamscan(port, host, tls, stream, function(stream) { stream.destroy(); }, filename, callback);
 }
 
 clamavpathscan = function(port, host, pathname, callback) {
@@ -126,8 +126,8 @@ clamav.prototype.createScanner = function (port, host) {
 }
 
 clamav.prototype.ping = function(port, host, timeout, callback) {
-  var status = '';
-  var socket = new net.Socket();
+  let status = '';
+  const socket = new net.Socket();
   socket.setTimeout(timeout);
   socket.connect(port, host, function() {
     socket.write("nPING\n");
@@ -154,8 +154,8 @@ clamav.prototype.ping = function(port, host, timeout, callback) {
 }
 
 clamav.prototype.version = function(port, host, timeout, callback) {
-  var status = '';
-  var socket = new net.Socket();
+  let status = '';
+  const socket = new net.Socket();
   socket.setTimeout(timeout);
   socket.connect(port, host, function() {
     socket.write("nVERSION\n");
