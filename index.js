@@ -14,7 +14,7 @@ function ClamAVChannel(options) {
 }
 ClamAVChannel.prototype._transform = function(chunk, encoding, callback) {
   if (!this._inBody) {
-    this.push("nINSTREAM\n");
+    this.push('nINSTREAM\n');
     this._inBody = true;
   }
 
@@ -49,9 +49,9 @@ clamavstreamscan = function(port, host, stream, complete, object, callback) {
     });
   }).on('data', function(data) {
     status += data;
-    if (data.toString().indexOf("\n") !== -1) {
+    if (data.toString().indexOf('\n') !== -1) {
       socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
+      status = status.substring(0, status.indexOf('\n'));
       let result = status.match(/^stream: (.+) FOUND$/);
       if (result !== null) {
         callback(undefined, object, result[1]);
@@ -106,15 +106,14 @@ clamavpathscan = function(port, host, pathname, callback) {
 }
 
 
-function clamav() {
+function clamav() {}
 
-}
 
 clamav.prototype.createScanner = function (port, host) {
   return {
-    "port": (port ? port : 3310),
-    "host": (host ? host : 'localhost'),
-    "scan": function(object, callback) {
+    port: (port ? port : 3310),
+    host: (host ? host : 'localhost'),
+    scan: function(object, callback) {
       if (typeof object === 'string') {
         clamavpathscan(this.port, this.host, object, callback);
       }
@@ -130,12 +129,12 @@ clamav.prototype.ping = function(port, host, timeout, callback) {
   const socket = new net.Socket();
   socket.setTimeout(timeout);
   socket.connect(port, host, function() {
-    socket.write("nPING\n");
+    socket.write('nPING\n');
   }).on('data', function(data) {
     status += data;
-    if (data.toString().indexOf("\n") !== -1) {
+    if (data.toString().indexOf('\n') !== -1) {
       socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
+      status = status.substring(0, status.indexOf('\n'));
       if (status === 'PONG') {
         callback();
       }
@@ -158,12 +157,12 @@ clamav.prototype.version = function(port, host, timeout, callback) {
   const socket = new net.Socket();
   socket.setTimeout(timeout);
   socket.connect(port, host, function() {
-    socket.write("nVERSION\n");
+    socket.write('nVERSION\n');
   }).on('data', function(data) {
     status += data;
-    if (data.toString().indexOf("\n") !== -1) {
+    if (data.toString().indexOf('\n') !== -1) {
       socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
+      status = status.substring(0, status.indexOf('\n'));
       if (status.length > 0) {
         callback(undefined, status);
       }
