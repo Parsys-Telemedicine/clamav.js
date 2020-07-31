@@ -34,132 +34,125 @@ ClamAVChannel.prototype._flush = function (callback) {
   callback();
 };
 
-clamavstreamscan = function(port, host, tls_on, timeout, stream, complete, object, callback) {
-  let status = '';
-  const socket = createSocket(tls_on, timeout);
-  socket.connect(port, host, function() {
-    const channel = new ClamAVChannel();
-    stream.pipe(channel).pipe(socket).on('end', function() {
-      if (status === '') {
-        callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
-      }
-      complete(stream);
-    }).on('error', function(err) {
-      callback(new Error(err), object);
-      complete(stream);
-    });
-  }).on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf('\n') !== -1) {
+class ClamAV {
+  constructor(port, host, tls_on, timeout, callback) {
+    const options = {
+      port: (port ? port : 3310),
+      host: (host ? host : 'localhost'),
+      timeout: (timeout ? timeout : 20000),
+    }
+    this.socket = tls_on ? tls.connect(options) : net.connect(options);
+    this.socket.on('error', function(err) {
       socket.destroy();
-      status = status.substring(0, status.indexOf('\n'));
-      let result = status.match(/^stream: (.+) FOUND$/);
-      if (result !== null) {
-        callback(undefined, object, result[1]);
-      }
-      else if (status === 'stream: OK') {
-        callback(undefined, object);
-      }
-      else {
-        result = status.match(/^(.+) ERROR/);
-        if (result != null) {
-          callback(new Error(result[1]), object);
-        }
-        else {
-          callback(new Error('Malformed Response['+status+']'), object);
-        }
-      }
-    }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err, object);
-  }).on('close', function() {});
-}
+      callback(err);
+    }).on('timeout', function() {
+      socket.destroy();
+      callback(new Error('Socket connection timeout'));
+    }).on('close', function() {});
+  }
 
-clamavfilescan = function(port, host, tls_on, filename, callback) {
-  const stream = fs.createReadStream(filename);
-  clamavstreamscan(port, host, tls_on, 20000, stream, function(stream) { stream.destroy(); }, filename, callback);
-}
-
-clamavpathscan = function(port, host, tls_on, pathname, callback) {
-  pathname = path.normalize(pathname);
-  fs.stat(pathname, function(err, stats) {
-    if (err) {
-      callback(err, pathname);
-    }
-    else if (stats.isDirectory()) {
-      fs.readdir(pathname, function(err, lists) {
-        lists.forEach(function(entry) {
-          clamavpathscan(port, host, tls_on, path.join(pathname, entry), callback);
-        });
-      });
-    }
-    else if (stats.isFile()) {
-        clamavfilescan(port, host, tls_on, pathname, callback);
-    }
-    else if (err) {
-      callback(err, pathname);
+  scan(object, callback) {
+    if (typeof object === 'string') {
+      this.pathscan(object, callback);
     }
     else {
-      callback(new Error('Not a regular file or directory'), pathname);
+      this.streamscan(object, function(stream) {}, object, callback);
     }
-  });
-}
-
-createSocket = function(tls_on, timeout) {
-  let socket = new net.Socket();
-  if (tls_on === true) {
-    socket = new tls.TLSSocket(socket);
   }
-  socket.setTimeout(timeout);
 
-  return socket;
-}
+  streamscan = function(stream, complete, object, callback) {
+    let status = '';
+    const socket = createSocket(tls_on, timeout);
+    socket.connect(port, host, function() {
+      const channel = new ClamAVChannel();
+      stream.pipe(channel).pipe(socket).on('end', function() {
+        if (status === '') {
+          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
+        }
+        complete(stream);
+      }).on('error', function(err) {
+        callback(new Error(err), object);
+        complete(stream);
+      });
+    }).on('data', function(data) {
+      status += data;
+      if (data.toString().indexOf('\n') !== -1) {
+        socket.destroy();
+        status = status.substring(0, status.indexOf('\n'));
+        let result = status.match(/^stream: (.+) FOUND$/);
+        if (result !== null) {
+          callback(undefined, object, result[1]);
+        }
+        else if (status === 'stream: OK') {
+          callback(undefined, object);
+        }
+        else {
+          result = status.match(/^(.+) ERROR/);
+          if (result != null) {
+            callback(new Error(result[1]), object);
+          }
+          else {
+            callback(new Error('Malformed Response['+status+']'), object);
+          }
+        }
+      }
+    })
+  }
 
+  filescan(filename, callback) {
+    const stream = fs.createReadStream(filename);
+    this.streamscan(stream, function(stream) { stream.destroy(); }, filename, callback);
+  }
 
-class ClamAV {}
-
-ClamAV.prototype.createScanner = function (port, host, tls_on) {
-  return {
-    port: (port ? port : 3310),
-    host: (host ? host : 'localhost'),
-    tls_on: (tls_on ? tls_on : false),
-    scan: function(object, callback) {
-      if (typeof object === 'string') {
-        clamavpathscan(this.port, this.host, this.tls_on, object, callback);
+  pathscan(pathname, callback) {
+    pathname = path.normalize(pathname);
+    fs.stat(pathname, function(err, stats) {
+      if (err) {
+        callback(err, pathname);
+      }
+      else if (stats.isDirectory()) {
+        fs.readdir(pathname, function(err, lists) {
+          lists.forEach(function(entry) {
+            this.pathscan(path.join(pathname, entry), callback);
+          });
+        });
+      }
+      else if (stats.isFile()) {
+        this.filescan(pathname, callback);
+      }
+      else if (err) {
+        callback(err, pathname);
       }
       else {
-        clamavstreamscan(this.port, this.host, this.tls_on, 20000, object, function(stream){ }, object, callback);
+        callback(new Error('Not a regular file or directory'), pathname);
       }
-    }
-  };
+    });
+  }
 }
 
 ClamAV.prototype.ping = function(port, host, tls_on, timeout, callback) {
   let status = '';
-  const socket = createSocket(tls_on, timeout);
-  socket.connect(port, host, function() {
+  const socket = tls.connect({ port: 443, host: 'antivirus.parsys.com', callback: function() {
     socket.write('nPING\n');
-  }).on('data', function(data) {
+  }});
+
+  const socket2 = createSocket(true, 20000);
+
+  socket2.on('data', function(data) {
     status += data;
     if (data.toString().indexOf('\n') !== -1) {
       socket.destroy();
       status = status.substring(0, status.indexOf('\n'));
       if (status === 'PONG') {
-        callback();
+        console.log('Oli PONG');
+        // callback();
       }
       else {
         socket.destroy();
-        callback(new Error('Invalid response('+status+')'));
+        // callback(new Error('Invalid response('+status+')'));
       }
     }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err);
-  }).on('timeout', function() {
-    socket.destroy();
-    callback(new Error('Socket connection timeout'));
-  }).on('close', function() {});
+  })
 }
 
 ClamAV.prototype.version = function(port, host, tls_on, timeout, callback) {
@@ -180,14 +173,7 @@ ClamAV.prototype.version = function(port, host, tls_on, timeout, callback) {
         callback(new Error('Invalid response'));
       }
     }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err);
-  }).on('timeout', function() {
-    socket.destroy();
-    callback(new Error('Socket connection timeout'));
-  }).on('close', function() {});
+  })
 }
 
 module.exports = ClamAV;
-
