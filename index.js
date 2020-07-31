@@ -2,6 +2,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const util = require('util');
+const tls = require('tls');
 const Transform = require('stream').Transform;
 util.inherits(ClamAVChannel, Transform);
 
@@ -33,9 +34,9 @@ ClamAVChannel.prototype._flush = function (callback) {
   callback();
 };
 
-clamavstreamscan = function(port, host, stream, complete, object, callback) {
-  const socket = new net.Socket();
+clamavstreamscan = function(port, host, tls_on, timeout, stream, complete, object, callback) {
   let status = '';
+  const socket = createSocket(tls_on, timeout);
   socket.connect(port, host, function() {
     const channel = new ClamAVChannel();
     stream.pipe(channel).pipe(socket).on('end', function() {
@@ -75,12 +76,12 @@ clamavstreamscan = function(port, host, stream, complete, object, callback) {
   }).on('close', function() {});
 }
 
-clamavfilescan = function(port, host, filename, callback) {
+clamavfilescan = function(port, host, tls_on, filename, callback) {
   const stream = fs.createReadStream(filename);
-  clamavstreamscan(port, host, tls, stream, function(stream) { stream.destroy(); }, filename, callback);
+  clamavstreamscan(port, host, tls_on, 20000, stream, function(stream) { stream.destroy(); }, filename, callback);
 }
 
-clamavpathscan = function(port, host, pathname, callback) {
+clamavpathscan = function(port, host, tls_on, pathname, callback) {
   pathname = path.normalize(pathname);
   fs.stat(pathname, function(err, stats) {
     if (err) {
@@ -89,12 +90,12 @@ clamavpathscan = function(port, host, pathname, callback) {
     else if (stats.isDirectory()) {
       fs.readdir(pathname, function(err, lists) {
         lists.forEach(function(entry) {
-          clamavpathscan(port, host, path.join(pathname, entry), callback);
+          clamavpathscan(port, host, tls_on, path.join(pathname, entry), callback);
         });
       });
     }
     else if (stats.isFile()) {
-        clamavfilescan(port, host, pathname, callback);
+        clamavfilescan(port, host, tls_on, pathname, callback);
     }
     else if (err) {
       callback(err, pathname);
@@ -105,29 +106,38 @@ clamavpathscan = function(port, host, pathname, callback) {
   });
 }
 
+createSocket = function(tls_on, timeout) {
+  let socket = new net.Socket();
+  if (tls_on === true) {
+    socket = new tls.TLSSocket(socket);
+  }
+  socket.setTimeout(timeout);
 
-function clamav() {}
+  return socket;
+}
 
 
-clamav.prototype.createScanner = function (port, host) {
+class ClamAV {}
+
+ClamAV.prototype.createScanner = function (port, host, tls_on) {
   return {
     port: (port ? port : 3310),
     host: (host ? host : 'localhost'),
+    tls_on: (tls_on ? tls_on : false),
     scan: function(object, callback) {
       if (typeof object === 'string') {
-        clamavpathscan(this.port, this.host, object, callback);
+        clamavpathscan(this.port, this.host, this.tls_on, object, callback);
       }
       else {
-        clamavstreamscan(this.port, this.host, object, function(stream){ }, object, callback);
+        clamavstreamscan(this.port, this.host, this.tls_on, 20000, object, function(stream){ }, object, callback);
       }
     }
   };
 }
 
-clamav.prototype.ping = function(port, host, timeout, callback) {
+ClamAV.prototype.ping = function(port, host, tls_on, timeout, callback) {
   let status = '';
-  const socket = new net.Socket();
-  socket.setTimeout(timeout);
+  const socket = createSocket(tls_on, timeout);
   socket.connect(port, host, function() {
     socket.write('nPING\n');
   }).on('data', function(data) {
@@ -152,10 +162,9 @@ clamav.prototype.ping = function(port, host, timeout, callback) {
   }).on('close', function() {});
 }
 
-clamav.prototype.version = function(port, host, timeout, callback) {
+ClamAV.prototype.version = function(port, host, tls_on, timeout, callback) {
   let status = '';
-  const socket = new net.Socket();
-  socket.setTimeout(timeout);
+  const socket = createSocket(tls_on, timeout);
   socket.connect(port, host, function() {
     socket.write('nVERSION\n');
   }).on('data', function(data) {
@@ -180,5 +189,5 @@ clamav.prototype.version = function(port, host, timeout, callback) {
   }).on('close', function() {});
 }
 
-module.exports = exports = new clamav();
+module.exports = ClamAV;
 
