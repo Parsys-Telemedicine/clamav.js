@@ -2,7 +2,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const tls = require('tls');
-const { Transform } = require('stream');
+const {Transform} = require('stream');
 
 class ClamAVChannel extends Transform {
   constructor(options) {
@@ -49,13 +49,13 @@ class ClamAV {
     }
     const socket = this.tls_on ? tls.connect(options) : net.connect(options);
 
-    socket.on('error', function(err) {
+    socket.on('error', function (err) {
       socket.destroy();
       callback(err);
-    }).on('timeout', function() {
+    }).on('timeout', function () {
       socket.destroy();
       callback(new Error('Socket connection timeout'));
-    }).on('close', function() {});
+    });
 
     return socket;
   }
@@ -63,9 +63,8 @@ class ClamAV {
   scan(object, callback) {
     if (typeof object === 'string') {
       this.pathScan(object, callback);
-    }
-    else {
-      this.streamScan(object, function(stream) {}, object, callback);
+    } else {
+      this.streamScan(object, object, callback);
     }
   }
 
@@ -73,17 +72,17 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.on('connect', function() {
+    socket.on('connect', function () {
       const channel = new ClamAVChannel();
 
-      stream.pipe(channel).pipe(socket).on('end', function() {
+      stream.pipe(channel).pipe(socket).on('end', function () {
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
         }
-      }).on('error', function(err) {
+      }).on('error', function (err) {
         callback(new Error(err), object);
       });
-    }).on('data', function(data) {
+    }).on('data', function (data) {
       status += data;
 
       if (data.toString().indexOf('\n') !== -1) {
@@ -100,7 +99,7 @@ class ClamAV {
           if (result != null) {
             callback(new Error(result[1]), object);
           } else {
-            callback(new Error('Malformed Response['+status+']'), object);
+            callback(new Error('Malformed Response[' + status + ']'), object);
           }
         }
       }
@@ -116,12 +115,12 @@ class ClamAV {
     const instance = this;
     pathname = path.normalize(pathname);
 
-    fs.stat(pathname, function(err, stats) {
+    fs.stat(pathname, function (err, stats) {
       if (err) {
         callback(err, pathname);
       } else if (stats.isDirectory()) {
-        fs.readdir(pathname, function(err, lists) {
-          lists.forEach(function(entry) {
+        fs.readdir(pathname, function (err, lists) {
+          lists.forEach(function (entry) {
             instance.pathScan(path.join(pathname, entry), callback);
           });
         });
@@ -139,9 +138,9 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.on('connect', function() {
+    socket.on('connect', function () {
       socket.write('nPING\n');
-    }).on('data', function(data) {
+    }).on('data', function (data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
@@ -149,7 +148,7 @@ class ClamAV {
         if (status === 'PONG') {
           callback();
         } else {
-          callback(new Error('Invalid response('+status+')'));
+          callback(new Error('Invalid response(' + status + ')'));
         }
       }
     })
@@ -159,9 +158,9 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.on('connect', function() {
+    socket.on('connect', function () {
       socket.write('nVERSION\n');
-    }).on('data', function(data) {
+    }).on('data', function (data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
