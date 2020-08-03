@@ -47,7 +47,7 @@ class ClamAV {
       host: this.host,
       timeout: this.timeout,
     }
-    socket = this.tls_on ? tls.connect(options) : net.connect(options);
+    const socket = this.tls_on ? tls.connect(options) : net.connect(options);
 
     socket.on('error', function(err) {
       socket.destroy();
