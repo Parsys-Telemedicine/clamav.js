@@ -2,8 +2,7 @@
   "extends": [
     "standard",
     "plugin:import/errors",
-    "plugin:import/warnings",
-    "plugin:react/recommended"
+    "plugin:import/warnings"
   ],
   "rules": {
     "curly": ["warn", "all"],
@@ -18,14 +17,7 @@
     "prefer-promise-reject-errors": ["warn"],
     "no-prototype-builtins": ["warn"]
   },
-  "parser": "@typescript-eslint/parser",
   "env": {
     "es6": true
-  },
-  "parserOptions": {
-    "ecmaVersion": 6
-  },
-  "plugins": [
-    "@typescript-eslint"
-  ]
+  }
 }
