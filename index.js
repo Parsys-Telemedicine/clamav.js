@@ -50,14 +50,12 @@ class ClamAV {
     this.socket = this.tls_on ? tls.connect(options) : net.connect(options);
 
     this.socket.on('error', function(err) {
-      socket.destroy();
+      this.socket.destroy();
       callback(err);
     }).on('timeout', function() {
-      socket.destroy();
+      this.socket.destroy();
       callback(new Error('Socket connection timeout'));
     }).on('close', function() {});
-
-    return socket;
   }
 
   scan(object, callback) {
@@ -71,12 +69,12 @@ class ClamAV {
 
   streamScan(stream, object, callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    this.initSocket(callback);
 
-    socket.connect(port, host, function() {
+    this.socket.connect(port, host, function() {
       const channel = new ClamAVChannel();
 
-      stream.pipe(channel).pipe(socket).on('end', function() {
+      stream.pipe(channel).pipe(this.socket).on('end', function() {
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
         }
@@ -87,7 +85,7 @@ class ClamAV {
       status += data;
 
       if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
+        this.socket.destroy();
         status = status.substring(0, status.indexOf('\n'));
         let result = status.match(/^stream: (.+) FOUND$/);
 
@@ -137,12 +135,12 @@ class ClamAV {
 
   ping(callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    this.initSocket(callback);
 
-    socket.on('data', function(data) {
+    this.socket.on('data', function(data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
+        this.socket.destroy();
         status = status.substring(0, status.indexOf('\n'));
         if (status === 'PONG') {
           callback();
@@ -155,14 +153,14 @@ class ClamAV {
 
   version(callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    this.initSocket(callback);
 
-    socket.connect(port, host, function() {
-      socket.write('nVERSION\n');
+    this.socket.connect(port, host, function() {
+      this.socket.write('nVERSION\n');
     }).on('data', function(data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
+        this.socket.destroy();
         status = status.substring(0, status.indexOf('\n'));
         if (status.length > 0) {
           callback(undefined, status);
