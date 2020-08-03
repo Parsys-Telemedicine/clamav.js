@@ -2,21 +2,21 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const tls = require('tls');
-const {Transform} = require('stream');
+const { Transform } = require('stream');
 
 class ClamAVChannel extends Transform {
-  constructor(options) {
+  constructor (options) {
     super(options);
     this._streaming = false;
   }
 
-  _transform(chunk, encoding, callback) {
+  _transform (chunk, encoding, callback) {
     if (!this._streaming) {
       this.push('nINSTREAM\n');
       this._streaming = true;
     }
 
-    const size = new Buffer(4);
+    const size = Buffer.alloc(4);
     size.writeInt32BE(chunk.length, 0);
     this.push(size);
     this.push(chunk);
@@ -24,8 +24,8 @@ class ClamAVChannel extends Transform {
     callback();
   }
 
-  _flush(callback) {
-    const size = new Buffer(4);
+  _flush (callback) {
+    const size = Buffer.alloc(4);
     size.writeInt32BE(0, 0);
     this.push(size);
 
@@ -34,20 +34,20 @@ class ClamAVChannel extends Transform {
 }
 
 class ClamAV {
-  constructor(port, host, tls_on, timeout) {
-    this.port = port ? port : 3310;
-    this.host = host ? host : 'localhost';
-    this.tls_on = tls_on ? tls_on : false;
-    this.timeout = timeout ? timeout : 20000;
+  constructor (port, host, tlsOn, timeout) {
+    this.port = port || 3310;
+    this.host = host || 'localhost';
+    this.tlsOn = tlsOn || false;
+    this.timeout = timeout || 20000;
   }
 
-  initSocket(callback) {
+  initSocket (callback) {
     const options = {
       port: this.port,
       host: this.host,
       timeout: this.timeout,
-    }
-    const socket = this.tls_on ? tls.connect(options) : net.connect(options);
+    };
+    const socket = this.tlsOn ? tls.connect(options) : net.connect(options);
 
     socket.on('error', function (err) {
       socket.destroy();
@@ -60,15 +60,15 @@ class ClamAV {
     return socket;
   }
 
-  scan(object, callback) {
+  scan (object, callback) {
     if (typeof object === 'string') {
       this.pathScan(object, callback);
     } else {
-      this.streamScan(object, object, callback);
+      this.streamScan(object, 'stream', callback);
     }
   }
 
-  streamScan(stream, object, callback) {
+  streamScan (stream, filename, callback) {
     let status = '';
     const socket = this.initSocket(callback);
 
@@ -77,10 +77,10 @@ class ClamAV {
 
       stream.pipe(channel).pipe(socket).on('end', function () {
         if (status === '') {
-          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
+          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), filename);
         }
       }).on('error', function (err) {
-        callback(new Error(err), object);
+        callback(new Error(err), filename);
       });
     }).on('data', function (data) {
       status += data;
@@ -91,27 +91,27 @@ class ClamAV {
         let result = status.match(/^stream: (.+) FOUND$/);
 
         if (result !== null) {
-          callback(undefined, object, result[1]);
+          callback(undefined, filename, result[1]);
         } else if (status === 'stream: OK') {
-          callback(undefined, object);
+          callback(undefined, filename);
         } else {
           result = status.match(/^(.+) ERROR/);
           if (result != null) {
-            callback(new Error(result[1]), object);
+            callback(new Error(result[1]), filename);
           } else {
-            callback(new Error('Malformed Response[' + status + ']'), object);
+            callback(new Error('Malformed Response[' + status + ']'), filename);
           }
         }
       }
-    })
+    });
   }
 
-  fileScan(filename, callback) {
+  fileScan (filename, callback) {
     const stream = fs.createReadStream(filename);
     this.streamScan(stream, filename, callback);
   }
 
-  pathScan(pathname, callback) {
+  pathScan (pathname, callback) {
     const instance = this;
     pathname = path.normalize(pathname);
 
@@ -119,10 +119,14 @@ class ClamAV {
       if (err) {
         callback(err, pathname);
       } else if (stats.isDirectory()) {
-        fs.readdir(pathname, function (err, lists) {
-          lists.forEach(function (entry) {
-            instance.pathScan(path.join(pathname, entry), callback);
-          });
+        fs.readdir(pathname, function (err, paths) {
+          if (err) {
+            callback(err, pathname);
+          } else {
+            paths.forEach(function (entry) {
+              instance.pathScan(path.join(pathname, entry), callback);
+            });
+          }
         });
       } else if (stats.isFile()) {
         instance.fileScan(pathname, callback);
@@ -134,7 +138,7 @@ class ClamAV {
     });
   }
 
-  ping(callback) {
+  ping (callback) {
     let status = '';
     const socket = this.initSocket(callback);
 
@@ -151,10 +155,10 @@ class ClamAV {
           callback(new Error('Invalid response(' + status + ')'));
         }
       }
-    })
+    });
   }
 
-  version(callback) {
+  version (callback) {
     let status = '';
     const socket = this.initSocket(callback);
 
@@ -171,7 +175,7 @@ class ClamAV {
           callback(new Error('Invalid response'));
         }
       }
-    })
+    });
   }
 }
 
