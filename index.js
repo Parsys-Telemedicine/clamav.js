@@ -1,38 +1,37 @@
 const fs = require('fs');
 const net = require('net');
 const path = require('path');
-const util = require('util');
 const tls = require('tls');
-const Transform = require('stream').Transform;
-util.inherits(ClamAVChannel, Transform);
+const { Transform } = require('stream');
 
-function ClamAVChannel(options) {
-  if (!(this instanceof ClamAVChannel))
-    return new ClamAVChannel(options);
-
-  Transform.call(this, options);
-  this._inBody = false;
-}
-ClamAVChannel.prototype._transform = function(chunk, encoding, callback) {
-  if (!this._inBody) {
-    this.push('nINSTREAM\n');
-    this._inBody = true;
+class ClamAVChannel extends Transform {
+  constructor(options) {
+    super(options);
+    this._streaming = false;
   }
 
-  const size = new Buffer(4);
-  size.writeInt32BE(chunk.length, 0);
-  this.push(size);
-  this.push(chunk);
+  _transform(chunk, encoding, callback) {
+    if (!this._streaming) {
+      this.push('nINSTREAM\n');
+      this._streaming = true;
+    }
 
-  callback();
-};
-ClamAVChannel.prototype._flush = function (callback) {
-  const size = new Buffer(4);
-  size.writeInt32BE(0, 0);
-  this.push(size);
+    const size = new Buffer(4);
+    size.writeInt32BE(chunk.length, 0);
+    this.push(size);
+    this.push(chunk);
 
-  callback();
-};
+    callback();
+  }
+
+  _flush(callback) {
+    const size = new Buffer(4);
+    size.writeInt32BE(0, 0);
+    this.push(size);
+
+    callback();
+  }
+}
 
 class ClamAV {
   constructor(port, host, tls_on, timeout) {
