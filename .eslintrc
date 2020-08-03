@@ -1,0 +1,31 @@
+{
+  "extends": [
+    "standard",
+    "plugin:import/errors",
+    "plugin:import/warnings",
+    "plugin:react/recommended"
+  ],
+  "rules": {
+    "curly": ["warn", "all"],
+    "brace-style": ["warn", "1tbs"],
+    "semi": ["warn", "always"],
+    "space-before-function-paren": ["warn", "always"],
+    "max-len": ["warn", { "code": 250 }],
+    "comma-dangle": ["warn", "always-multiline"],
+    "no-return-assign": ["off"],
+    "no-unused-vars": ["warn"],
+    "operator-linebreak": ["warn", "after"],
+    "prefer-promise-reject-errors": ["warn"],
+    "no-prototype-builtins": ["warn"]
+  },
+  "parser": "@typescript-eslint/parser",
+  "env": {
+    "es6": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 6
+  },
+  "plugins": [
+    "@typescript-eslint"
+  ]
+}
