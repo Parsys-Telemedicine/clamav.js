@@ -1,8 +1,8 @@
-import fs from 'fs';
-import net from'net';
-import path from'path';
-import { Transform } from'stream';
-import tls from'tls';
+const fs = require('fs');
+const net = require('net');
+const path = require('path');
+const tls = require('tls');
+const { Transform } = require('stream');
 
 class ClamAVChannel extends Transform {
   constructor(options) {
