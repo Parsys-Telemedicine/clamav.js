@@ -73,7 +73,7 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.connect(port, host, function() {
+    socket.on('connect', function() {
       const channel = new ClamAVChannel();
 
       stream.pipe(channel).pipe(socket).on('end', function() {
@@ -139,7 +139,9 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.on('data', function(data) {
+    socket.on('connect', function() {
+      socket.write('nPING\n');
+    }).on('data', function(data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
@@ -157,7 +159,7 @@ class ClamAV {
     let status = '';
     const socket = this.initSocket(callback);
 
-    socket.connect(port, host, function() {
+    socket.on('connect', function() {
       socket.write('nVERSION\n');
     }).on('data', function(data) {
       status += data;
