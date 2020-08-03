@@ -63,14 +63,14 @@ class ClamAV {
 
   scan(object, callback) {
     if (typeof object === 'string') {
-      this.pathscan(object, callback);
+      this.pathScan(object, callback);
     }
     else {
-      this.streamscan(object, function(stream) {}, object, callback);
+      this.streamScan(object, function(stream) {}, object, callback);
     }
   }
 
-  streamscan = function(stream, complete, object, callback) {
+  streamScan(stream, object, callback) {
     let status = '';
     const socket = this.initSocket(callback);
 
@@ -108,12 +108,12 @@ class ClamAV {
     })
   }
 
-  filescan(filename, callback) {
+  fileScan(filename, callback) {
     const stream = fs.createReadStream(filename);
-    this.streamscan(stream, function(stream) { stream.destroy(); }, filename, callback);
+    this.streamScan(stream, filename, callback);
   }
 
-  pathscan(pathname, callback) {
+  pathScan(pathname, callback) {
     const instance = this;
     pathname = path.normalize(pathname);
 
@@ -123,7 +123,7 @@ class ClamAV {
       } else if (stats.isDirectory()) {
         fs.readdir(pathname, function(err, lists) {
           lists.forEach(function(entry) {
-            this.pathscan(path.join(pathname, entry), callback);
+            instance.pathScan(path.join(pathname, entry), callback);
           });
         });
       } else if (stats.isFile()) {
