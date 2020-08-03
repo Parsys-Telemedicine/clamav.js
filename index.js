@@ -81,29 +81,26 @@ class ClamAV {
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
         }
-        complete(stream);
       }).on('error', function(err) {
         callback(new Error(err), object);
-        complete(stream);
       });
     }).on('data', function(data) {
       status += data;
+
       if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
         status = status.substring(0, status.indexOf('\n'));
         let result = status.match(/^stream: (.+) FOUND$/);
+
         if (result !== null) {
           callback(undefined, object, result[1]);
-        }
-        else if (status === 'stream: OK') {
+        } else if (status === 'stream: OK') {
           callback(undefined, object);
-        }
-        else {
+        } else {
           result = status.match(/^(.+) ERROR/);
           if (result != null) {
             callback(new Error(result[1]), object);
-          }
-          else {
+          } else {
             callback(new Error('Malformed Response['+status+']'), object);
           }
         }
@@ -117,25 +114,23 @@ class ClamAV {
   }
 
   pathscan(pathname, callback) {
+    const instance = this;
     pathname = path.normalize(pathname);
+
     fs.stat(pathname, function(err, stats) {
       if (err) {
         callback(err, pathname);
-      }
-      else if (stats.isDirectory()) {
+      } else if (stats.isDirectory()) {
         fs.readdir(pathname, function(err, lists) {
           lists.forEach(function(entry) {
             this.pathscan(path.join(pathname, entry), callback);
           });
         });
-      }
-      else if (stats.isFile()) {
-        this.filescan(pathname, callback);
-      }
-      else if (err) {
+      } else if (stats.isFile()) {
+        instance.fileScan(pathname, callback);
+      } else if (err) {
         callback(err, pathname);
-      }
-      else {
+      } else {
         callback(new Error('Not a regular file or directory'), pathname);
       }
     });
