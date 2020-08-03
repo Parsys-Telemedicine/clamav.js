@@ -37,7 +37,7 @@ class ClamAV {
   constructor(port, host, tls_on, timeout) {
     this.port = port ? port : 3310;
     this.host = host ? host : 'localhost';
-    this.tls_on = host ? host : 'localhost';
+    this.tls_on = tls_on ? tls_on : false;
     this.timeout = timeout ? timeout : 20000;
   }
 
