@@ -35,13 +35,21 @@ ClamAVChannel.prototype._flush = function (callback) {
 };
 
 class ClamAV {
-  constructor(port, host, tls_on, timeout, callback) {
+  constructor(port, host, tls_on, timeout) {
+    this.port = port ? port : 3310;
+    this.host = host ? host : 'localhost';
+    this.tls_on = host ? host : 'localhost';
+    this.timeout = timeout ? timeout : 20000;
+  }
+
+  initSocket(callback) {
     const options = {
-      port: (port ? port : 3310),
-      host: (host ? host : 'localhost'),
-      timeout: (timeout ? timeout : 20000),
+      port: this.port,
+      host: this.host,
+      timeout: this.timeout,
     }
     this.socket = tls_on ? tls.connect(options) : net.connect(options);
+
     this.socket.on('error', function(err) {
       socket.destroy();
       callback(err);
@@ -49,6 +57,8 @@ class ClamAV {
       socket.destroy();
       callback(new Error('Socket connection timeout'));
     }).on('close', function() {});
+
+    return socket;
   }
 
   scan(object, callback) {
@@ -62,9 +72,11 @@ class ClamAV {
 
   streamscan = function(stream, complete, object, callback) {
     let status = '';
-    const socket = createSocket(tls_on, timeout);
+    const socket = this.initSocket(callback);
+
     socket.connect(port, host, function() {
       const channel = new ClamAVChannel();
+
       stream.pipe(channel).pipe(socket).on('end', function() {
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
