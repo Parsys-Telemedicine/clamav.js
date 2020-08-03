@@ -140,52 +140,44 @@ class ClamAV {
       }
     });
   }
-}
 
-ClamAV.prototype.ping = function(port, host, tls_on, timeout, callback) {
-  let status = '';
-  const socket = tls.connect({ port: 443, host: 'antivirus.parsys.com', callback: function() {
-    socket.write('nPING\n');
-  }});
+  ping(callback) {
+    let status = '';
+    const socket = this.initSocket(callback);
 
-  const socket2 = createSocket(true, 20000);
-
-  socket2.on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf('\n') !== -1) {
-      socket.destroy();
-      status = status.substring(0, status.indexOf('\n'));
-      if (status === 'PONG') {
-        console.log('Oli PONG');
-        // callback();
-      }
-      else {
+    socket.on('data', function(data) {
+      status += data;
+      if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
-        // callback(new Error('Invalid response('+status+')'));
+        status = status.substring(0, status.indexOf('\n'));
+        if (status === 'PONG') {
+          callback();
+        } else {
+          callback(new Error('Invalid response('+status+')'));
+        }
       }
-    }
-  })
-}
+    })
+  }
 
-ClamAV.prototype.version = function(port, host, tls_on, timeout, callback) {
-  let status = '';
-  const socket = createSocket(tls_on, timeout);
-  socket.connect(port, host, function() {
-    socket.write('nVERSION\n');
-  }).on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf('\n') !== -1) {
-      socket.destroy();
-      status = status.substring(0, status.indexOf('\n'));
-      if (status.length > 0) {
-        callback(undefined, status);
-      }
-      else {
+  version(callback) {
+    let status = '';
+    const socket = this.initSocket(callback);
+
+    socket.connect(port, host, function() {
+      socket.write('nVERSION\n');
+    }).on('data', function(data) {
+      status += data;
+      if (data.toString().indexOf('\n') !== -1) {
         socket.destroy();
-        callback(new Error('Invalid response'));
+        status = status.substring(0, status.indexOf('\n'));
+        if (status.length > 0) {
+          callback(undefined, status);
+        } else {
+          callback(new Error('Invalid response'));
+        }
       }
-    }
-  })
+    })
+  }
 }
 
 module.exports = ClamAV;
