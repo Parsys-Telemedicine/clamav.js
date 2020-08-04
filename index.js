@@ -41,7 +41,7 @@ class ClamAV {
     this.timeout = timeout || 20000;
   }
 
-  initSocket (filename, callback) {
+  initSocket (callback, filename) {
     const options = {
       port: this.port,
       host: this.host,
@@ -69,7 +69,7 @@ class ClamAV {
 
   streamScan (stream, filename, callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    const socket = this.initSocket(callback, filename);
 
     socket.on('connect', function () {
       const channel = new ClamAVChannel();
@@ -146,8 +146,10 @@ class ClamAV {
       socket.write('nPING\n');
     }).on('data', function (data) {
       status += data;
+
       if (data.toString().indexOf('\n') !== -1) {
         socket.end();
+
         status = status.substring(0, status.indexOf('\n'));
         if (status === 'PONG') {
           callback();
@@ -166,8 +168,10 @@ class ClamAV {
       socket.write('nVERSION\n');
     }).on('data', function (data) {
       status += data;
+
       if (data.toString().indexOf('\n') !== -1) {
         socket.end();
+
         status = status.substring(0, status.indexOf('\n'));
         if (status.length > 0) {
           callback(undefined, status);
