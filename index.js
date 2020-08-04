@@ -42,6 +42,8 @@ class ClamAV {
   }
 
   initSocket (filename, callback) {
+    const instance = this;
+
     const options = {
       port: this.port,
       host: this.host,
@@ -50,13 +52,22 @@ class ClamAV {
     const socket = this.tlsOn ? tls.connect(options) : net.connect(options);
 
     socket.on('error', function (err) {
+      instance.closeStream();
       callback(err, filename);
     }).on('timeout', function () {
       socket.destroy();
+      instance.closeStream();
       callback(new Error('Socket connection timeout'), filename);
     });
 
     return socket;
+  }
+
+  closeStream () {
+    if (this.stream) {
+      this.stream.destroy();
+      delete this.stream;
+    }
   }
 
   scan (object, callback) {
@@ -68,6 +79,7 @@ class ClamAV {
   }
 
   streamScan (stream, callback) {
+    const instance = this;
     let status = '';
     const socket = this.initSocket(stream.path, callback);
 
@@ -79,6 +91,7 @@ class ClamAV {
 
         if (data.toString().indexOf('\n') !== -1) {
           socket.end();
+          instance.closeStream();
 
           status = status.substring(0, status.indexOf('\n'));
           let result = status.match(/^stream: (.+) FOUND$/);
@@ -97,10 +110,12 @@ class ClamAV {
           }
         }
       }).on('end', function () {
+        instance.closeStream();
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), stream.path);
         }
       }).on('error', function (err) {
+        instance.closeStream();
         callback(new Error(err), stream.path);
       });
     });
@@ -108,6 +123,7 @@ class ClamAV {
 
   fileScan (filename, callback) {
     const stream = fs.createReadStream(filename);
+    this.stream = stream;
     this.streamScan(stream, callback);
   }
 
