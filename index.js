@@ -41,7 +41,7 @@ class ClamAV {
     this.timeout = timeout || 20000;
   }
 
-  initSocket (callback, filename) {
+  initSocket (filename, callback) {
     const options = {
       port: this.port,
       host: this.host,
@@ -63,13 +63,13 @@ class ClamAV {
     if (typeof object === 'string') {
       this.pathScan(object, callback);
     } else {
-      this.streamScan(object, 'stream', callback);
+      this.streamScan(object, callback);
     }
   }
 
-  streamScan (stream, filename, callback) {
+  streamScan (stream, callback) {
     let status = '';
-    const socket = this.initSocket(callback, filename);
+    const socket = this.initSocket(stream.path, callback);
 
     socket.on('connect', function () {
       const channel = new ClamAVChannel();
@@ -84,31 +84,31 @@ class ClamAV {
           let result = status.match(/^stream: (.+) FOUND$/);
 
           if (result !== null) {
-            callback(undefined, filename, result[1]);
+            callback(undefined, stream.path, result[1]);
           } else if (status === 'stream: OK') {
-            callback(undefined, filename);
+            callback(undefined, stream.path);
           } else {
             result = status.match(/^(.+) ERROR/);
             if (result != null) {
-              callback(new Error(result[1]), filename);
+              callback(new Error(result[1]), stream.path);
             } else {
-              callback(new Error('Malformed Response[' + status + ']'), filename);
+              callback(new Error('Malformed Response[' + status + ']'), stream.path);
             }
           }
         }
       }).on('end', function () {
         if (status === '') {
-          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), filename);
+          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), stream.path);
         }
       }).on('error', function (err) {
-        callback(new Error(err), filename);
+        callback(new Error(err), stream.path);
       });
     });
   }
 
   fileScan (filename, callback) {
     const stream = fs.createReadStream(filename);
-    this.streamScan(stream, filename, callback);
+    this.streamScan(stream, callback);
   }
 
   pathScan (pathname, callback) {
@@ -140,7 +140,7 @@ class ClamAV {
 
   ping (callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    const socket = this.initSocket('ping', callback);
 
     socket.on('connect', function () {
       socket.write('nPING\n');
@@ -162,7 +162,7 @@ class ClamAV {
 
   version (callback) {
     let status = '';
-    const socket = this.initSocket(callback);
+    const socket = this.initSocket('version', callback);
 
     socket.on('connect', function () {
       socket.write('nVERSION\n');
