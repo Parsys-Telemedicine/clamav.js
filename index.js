@@ -41,7 +41,7 @@ class ClamAV {
     this.timeout = timeout || 20000;
   }
 
-  initSocket (callback) {
+  initSocket (filename, callback) {
     const options = {
       port: this.port,
       host: this.host,
@@ -50,11 +50,10 @@ class ClamAV {
     const socket = this.tlsOn ? tls.connect(options) : net.connect(options);
 
     socket.on('error', function (err) {
-      socket.destroy();
-      callback(err);
+      callback(err, filename);
     }).on('timeout', function () {
       socket.destroy();
-      callback(new Error('Socket connection timeout'));
+      callback(new Error('Socket connection timeout'), filename);
     });
 
     return socket;
