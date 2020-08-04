@@ -146,7 +146,7 @@ class ClamAV {
     }).on('data', function (data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
+        socket.end();
         status = status.substring(0, status.indexOf('\n'));
         if (status === 'PONG') {
           callback();
@@ -166,7 +166,7 @@ class ClamAV {
     }).on('data', function (data) {
       status += data;
       if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
+        socket.end();
         status = status.substring(0, status.indexOf('\n'));
         if (status.length > 0) {
           callback(undefined, status);
