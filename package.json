@@ -1,7 +1,7 @@
 {
   "name": "clamav.js",
-  "version": "0.12.0",
-  "description": "A node.js library for ClamAV.",
+  "version": "1.0",
+  "description": "A node.js library for ClamAV. Heavy rewrite of https://github.com/yongtang/clamav.js.",
   "keywords": [
     "clamav.js",
     "clamav",
@@ -17,12 +17,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/yongtang/clamav.js.git"
+    "url": "https://github.com/parsys-telemedicine/clamav.js.git"
   },
   "author": "yongtang",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/yongtang/clamav.js/issues"
+    "url": "https://github.com/parsys-telemedicine/clamav.js/issues"
   },
-  "homepage": "https://github.com/yongtang/clamav.js"
+  "homepage": "https://github.com/parsys-telemedicine/clamav.js"
 }
