@@ -74,34 +74,35 @@ class ClamAV {
     socket.on('connect', function () {
       const channel = new ClamAVChannel();
 
-      stream.pipe(channel).pipe(socket).on('end', function () {
+      stream.pipe(channel).pipe(socket, { end: false }).on('data', function (data) {
+        status += data;
+
+        if (data.toString().indexOf('\n') !== -1) {
+          socket.end();
+
+          status = status.substring(0, status.indexOf('\n'));
+          let result = status.match(/^stream: (.+) FOUND$/);
+
+          if (result !== null) {
+            callback(undefined, filename, result[1]);
+          } else if (status === 'stream: OK') {
+            callback(undefined, filename);
+          } else {
+            result = status.match(/^(.+) ERROR/);
+            if (result != null) {
+              callback(new Error(result[1]), filename);
+            } else {
+              callback(new Error('Malformed Response[' + status + ']'), filename);
+            }
+          }
+        }
+      }).on('end', function () {
         if (status === '') {
           callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), filename);
         }
       }).on('error', function (err) {
         callback(new Error(err), filename);
       });
-    }).on('data', function (data) {
-      status += data;
-
-      if (data.toString().indexOf('\n') !== -1) {
-        socket.destroy();
-        status = status.substring(0, status.indexOf('\n'));
-        let result = status.match(/^stream: (.+) FOUND$/);
-
-        if (result !== null) {
-          callback(undefined, filename, result[1]);
-        } else if (status === 'stream: OK') {
-          callback(undefined, filename);
-        } else {
-          result = status.match(/^(.+) ERROR/);
-          if (result != null) {
-            callback(new Error(result[1]), filename);
-          } else {
-            callback(new Error('Malformed Response[' + status + ']'), filename);
-          }
-        }
-      }
     });
   }
 
