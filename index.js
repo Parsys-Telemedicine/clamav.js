@@ -1,185 +1,202 @@
-var fs = require('fs');
-var net = require('net');
-var path = require('path');
-var util = require('util');
-var Transform = require('stream').Transform;
-util.inherits(ClamAVChannel, Transform);
+const fs = require('fs');
+const net = require('net');
+const path = require('path');
+const tls = require('tls');
+const { Transform } = require('stream');
 
-function ClamAVChannel(options) {
-  if (!(this instanceof ClamAVChannel))
-    return new ClamAVChannel(options);
-
-  Transform.call(this, options);
-  this._inBody = false;
-}
-ClamAVChannel.prototype._transform = function(chunk, encoding, callback) {
-  if (!this._inBody) {
-    this.push("nINSTREAM\n");
-    this._inBody = true;
+class ClamAVChannel extends Transform {
+  constructor (options) {
+    super(options);
+    this._streaming = false;
   }
 
-  var size = new Buffer(4);
-  size.writeInt32BE(chunk.length, 0);
-  this.push(size);
-  this.push(chunk);
+  _transform (chunk, encoding, callback) {
+    if (!this._streaming) {
+      this.push('nINSTREAM\n');
+      this._streaming = true;
+    }
 
-  callback();
-};
-ClamAVChannel.prototype._flush = function (callback) {
-  var size = new Buffer(4);
-  size.writeInt32BE(0, 0);
-  this.push(size);
+    const size = Buffer.alloc(4);
+    size.writeInt32BE(chunk.length, 0);
+    this.push(size);
+    this.push(chunk);
 
-  callback();
-};
+    callback();
+  }
 
-clamavstreamscan = function(port, host, stream, complete, object, callback) {
-  var socket = new net.Socket();
-  var status = '';
-  socket.connect(port, host, function() {
-    var channel = new ClamAVChannel();
-    stream.pipe(channel).pipe(socket).on('end', function() {
-      if (status === '') {
-        callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), object);
-      }
-      complete(stream);
-    }).on('error', function(err) {
-      callback(new Error(err), object);
-      complete(stream);
+  _flush (callback) {
+    const size = Buffer.alloc(4);
+    size.writeInt32BE(0, 0);
+    this.push(size);
+
+    callback();
+  }
+}
+
+class ClamAV {
+  constructor (port, host, tlsOn, timeout) {
+    this.port = port || 3310;
+    this.host = host || 'localhost';
+    this.tlsOn = tlsOn || false;
+    this.timeout = timeout || 20000;
+  }
+
+  initSocket (filename, callback) {
+    const instance = this;
+
+    const options = {
+      port: this.port,
+      host: this.host,
+      timeout: this.timeout,
+    };
+    const socket = this.tlsOn ? tls.connect(options) : net.connect(options);
+
+    socket.on('error', function (err) {
+      instance.closeStream();
+      callback(err, filename);
+    }).on('timeout', function () {
+      socket.destroy();
+      instance.closeStream();
+      callback(new Error('Socket connection timeout'), filename);
     });
-  }).on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf("\n") !== -1) {
-      socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
-      var result = status.match(/^stream: (.+) FOUND$/);
-      if (result !== null) {
-        callback(undefined, object, result[1]);
-      }
-      else if (status === 'stream: OK') {
-        callback(undefined, object);
-      }
-      else {
-        result = status.match(/^(.+) ERROR/);
-        if (result != null) {
-          callback(new Error(result[1]), object);
-        }
-        else {
-          callback(new Error('Malformed Response['+status+']'), object);
-        }
-      }
-    }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err, object);
-  }).on('close', function() {});
-}
 
-clamavfilescan = function(port, host, filename, callback) {
-  var stream = fs.createReadStream(filename);
-  clamavstreamscan(port, host, stream, function(stream) { stream.destroy(); }, filename, callback);
-}
+    return socket;
+  }
 
-clamavpathscan = function(port, host, pathname, callback) {
-  pathname = path.normalize(pathname);
-  fs.stat(pathname, function(err, stats) {
-    if (err) {
-      callback(err, pathname);
+  closeStream () {
+    if (this.stream) {
+      this.stream.destroy();
+      delete this.stream;
     }
-    else if (stats.isDirectory()) {
-      fs.readdir(pathname, function(err, lists) {
-        lists.forEach(function(entry) {
-          clamavpathscan(port, host, path.join(pathname, entry), callback);
-        });
+  }
+
+  scan (object, callback) {
+    if (typeof object === 'string') {
+      this.pathScan(object, callback);
+    } else {
+      this.streamScan(object, callback);
+    }
+  }
+
+  streamScan (stream, callback) {
+    const instance = this;
+    let status = '';
+    const socket = this.initSocket(stream.path, callback);
+
+    socket.on('connect', function () {
+      const channel = new ClamAVChannel();
+
+      stream.pipe(channel).pipe(socket, { end: false }).on('data', function (data) {
+        status += data;
+
+        if (data.toString().indexOf('\n') !== -1) {
+          socket.end();
+          instance.closeStream();
+
+          status = status.substring(0, status.indexOf('\n'));
+          let result = status.match(/^stream: (.+) FOUND$/);
+
+          if (result !== null) {
+            callback(undefined, stream.path, result[1]);
+          } else if (status === 'stream: OK') {
+            callback(undefined, stream.path);
+          } else {
+            result = status.match(/^(.+) ERROR/);
+            if (result != null) {
+              callback(new Error(result[1]), stream.path);
+            } else {
+              callback(new Error('Malformed Response[' + status + ']'), stream.path);
+            }
+          }
+        }
+      }).on('end', function () {
+        instance.closeStream();
+        if (status === '') {
+          callback(new Error('No response received from ClamAV. Consider increasing MaxThreads in clamd.conf'), stream.path);
+        }
+      }).on('error', function (err) {
+        instance.closeStream();
+        callback(new Error(err), stream.path);
       });
-    }
-    else if (stats.isFile()) {
-        clamavfilescan(port, host, pathname, callback);
-    }
-    else if (err) {
-      callback(err, pathname);
-    }
-    else {
-      callback(new Error('Not a regular file or directory'), pathname);
-    }
-  });
+    });
+  }
+
+  fileScan (filename, callback) {
+    const stream = fs.createReadStream(filename);
+    this.stream = stream;
+    this.streamScan(stream, callback);
+  }
+
+  pathScan (pathname, callback) {
+    const instance = this;
+    pathname = path.normalize(pathname);
+
+    fs.stat(pathname, function (err, stats) {
+      if (err) {
+        callback(err, pathname);
+      } else if (stats.isDirectory()) {
+        fs.readdir(pathname, function (err, paths) {
+          if (err) {
+            callback(err, pathname);
+          } else {
+            paths.forEach(function (entry) {
+              instance.pathScan(path.join(pathname, entry), callback);
+            });
+          }
+        });
+      } else if (stats.isFile()) {
+        instance.fileScan(pathname, callback);
+      } else if (err) {
+        callback(err, pathname);
+      } else {
+        callback(new Error('Not a regular file or directory'), pathname);
+      }
+    });
+  }
+
+  ping (callback) {
+    let status = '';
+    const socket = this.initSocket('ping', callback);
+
+    socket.on('connect', function () {
+      socket.write('nPING\n');
+    }).on('data', function (data) {
+      status += data;
+
+      if (data.toString().indexOf('\n') !== -1) {
+        socket.end();
+
+        status = status.substring(0, status.indexOf('\n'));
+        if (status === 'PONG') {
+          callback();
+        } else {
+          callback(new Error('Invalid response(' + status + ')'));
+        }
+      }
+    });
+  }
+
+  version (callback) {
+    let status = '';
+    const socket = this.initSocket('version', callback);
+
+    socket.on('connect', function () {
+      socket.write('nVERSION\n');
+    }).on('data', function (data) {
+      status += data;
+
+      if (data.toString().indexOf('\n') !== -1) {
+        socket.end();
+
+        status = status.substring(0, status.indexOf('\n'));
+        if (status.length > 0) {
+          callback(undefined, status);
+        } else {
+          callback(new Error('Invalid response'));
+        }
+      }
+    });
+  }
 }
 
-
-function clamav() {
-
-}
-
-clamav.prototype.createScanner = function (port, host) {
-  return {
-    "port": (port ? port : 3310),
-    "host": (host ? host : 'localhost'),
-    "scan": function(object, callback) {
-      if (typeof object === 'string') {
-        clamavpathscan(this.port, this.host, object, callback);
-      }
-      else {
-        clamavstreamscan(this.port, this.host, object, function(stream){ }, object, callback);
-      }
-    }
-  };
-}
-
-clamav.prototype.ping = function(port, host, timeout, callback) {
-  var status = '';
-  var socket = new net.Socket();
-  socket.setTimeout(timeout);
-  socket.connect(port, host, function() {
-    socket.write("nPING\n");
-  }).on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf("\n") !== -1) {
-      socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
-      if (status === 'PONG') {
-        callback();
-      }
-      else {
-        socket.destroy();
-        callback(new Error('Invalid response('+status+')'));
-      }
-    }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err);
-  }).on('timeout', function() {
-    socket.destroy();
-    callback(new Error('Socket connection timeout'));
-  }).on('close', function() {});
-}
-
-clamav.prototype.version = function(port, host, timeout, callback) {
-  var status = '';
-  var socket = new net.Socket();
-  socket.setTimeout(timeout);
-  socket.connect(port, host, function() {
-    socket.write("nVERSION\n");
-  }).on('data', function(data) {
-    status += data;
-    if (data.toString().indexOf("\n") !== -1) {
-      socket.destroy();
-      status = status.substring(0, status.indexOf("\n"));
-      if (status.length > 0) {
-        callback(undefined, status);
-      }
-      else {
-        socket.destroy();
-        callback(new Error('Invalid response'));
-      }
-    }
-  }).on('error', function(err) {
-    socket.destroy();
-    callback(err);
-  }).on('timeout', function() {
-    socket.destroy();
-    callback(new Error('Socket connection timeout'));
-  }).on('close', function() {});
-}
-
-module.exports = exports = new clamav();
-
+module.exports = ClamAV;
